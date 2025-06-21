@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal Q&A - The Virtual Advocate</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+        }
+        .nav-item {
+            @apply px-4 py-2 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors duration-200 cursor-pointer;
+        }
+        .nav-item.active {
+            @apply bg-blue-100 text-blue-700 font-semibold;
+        }
+        .loader {
+            border: 4px solid #e2e8f0; /* slate-200 */
+            border-top: 4px solid #3b82f6; /* blue-600 */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <div id="app" class="flex flex-col min-h-screen">
+        <header class="bg-white/80 backdrop-blur-sm shadow-sm w-full p-4 flex items-center justify-between z-20 flex-shrink-0 sticky top-0">
+             <a href="index.html" class="flex items-center">
+                <i class="fas fa-balance-scale text-2xl text-blue-600 mr-3"></i>
+                <h1 class="text-2xl font-bold text-slate-800">LexMentorAI</h1>
+            </a>
+            <nav id="main-nav" class="flex items-center space-x-2">
+                 <a href="index.html" class="nav-item">Home</a>
+                 <a href="index.html#analyzer" class="nav-item">Document Analyzer</a>
+                 <a href="negotiation_simulator.html" class="nav-item">Negotiation Simulator</a>
+                 <a href="legal_qa.html" class="nav-item active">Legal Q&A</a>
+            </nav>
+        </header>
+        
+        <main class="flex-grow">
+            <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+                <header class="text-center mb-8">
+                    <h1 class="text-3xl md:text-4xl font-bold text-slate-900">Legal Q&A Finder</h1>
+                    <p class="text-slate-600 mt-2">Ask a question about any company-related documents, and the AI will find the answer.</p>
+                </header>
+
+                <!-- Search Input and Button -->
+                <div class="flex gap-2 mb-8">
+                    <input type="text" id="searchInput" class="flex-grow bg-white border border-slate-300 rounded-md px-4 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., 'What is the policy on sick leave?'">
+                    <button id="searchButton" class="bg-blue-600 text-white font-bold rounded-md px-6 py-2 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-50 transition-colors">
+                        Ask
+                    </button>
+                </div>
+
+                <!-- Results Container -->
+                <div id="resultsContainer">
+                    <!-- AI response will be injected here -->
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="text-center p-4 text-slate-500 text-sm flex-shrink-0">
+            Powered by Vibe Legal
+        </footer>
+    </div>
+
+    <script>
+        // --- DATA ---
+        const documentDatabase = {
+            'doc1': {
+                name: 'doc-agency-agreement.pdf',
+                content: `THIS AGREEMENT is made on between: (i) Smith Ltd whose registered office is at 1 The Road The Town The County AB1 2CD ('the Principal') and (ii) Jones Ltd. whose registered office is at 2 The Road The Town The County AB1 2CD ('the Agent'). 1 DEFINITIONS The following terms mean: Address for Service: the address for service of the Principal and the Agent shall be the address shown in this Agreement or such other address as has been notified by the party concerned as being their address for service for the purposes of this Agreement. Agreement: this agreement. Commencement Date: Commission: 5.00% of the net sale price of all the Goods and Services sold by the Principal by transactions concluded during the Term or after the termination of this Agreement where the order is received before termination: 1. as a result of the Agent's action, or 2. with a third party whom the Agent has previously acquired as a customer for transactions of the same kind and a proportion, to be determined by the Principal in its absolute discretion, of 5.00% of the net sale price of all the Goods and Services sold by the Principal where the transaction is mainly attributable to the efforts of the Agent and is entered into within a reasonable period after the termination of this Agreement. Force Majeure: any event or circumstance beyond the reasonable control of either the Principal or the Agent... IPR: the Marks, patents, all rights to inventions, prototypes, products, discoveries, techniques or processes, systems, data, information, copyright and related rights, moral rights, trade names, domain names, brand names, rights to goodwill, rights in design, rights in computer software (including source code and object code), database rights, rights in confidential information (including know how and trade secrets) and any other intellectual property rights...`
+            },
+            'doc2': {
+                name: 'doc-consultancy-agreement.pdf',
+                content: `Date: John Smith and Jones Ltd Consultancy agreement. This Agreement is made on between: (i) John Smith of 1 The Road, The Town, The County, AB1 2CD ('the Consultant') and (ii) Jones Ltd whose registered office is at 2 The Road, The Town, The County, AB2 2CD ('the Client'). 1 Definitions In this Agreement, the following expressions shall, save where the context otherwise requires, have the following meanings: Agreement: means this agreement; Background IPR means all Intellectual Property Rights... Confidential Information: means information of a confidential nature (regardless of the form or medium in which it is disclosed or stored) including, but not limited to, trade secrets or secret or confidential operations and extends to information relating to the Client's (or any of its subsidiaries): business; processes; strategy; operations; specifications; technology; know-how; organisation; business affairs; finances; dealings; transactions; customer, client and supplier lists or other information...`
+            },
+            'doc3': {
+                name: 'doc-employee-handbook.pdf',
+                content: `Smith Ltd Employee Handbook. Introduction. This handbook is intended to outline and explain the practices and policies of Smith Ltd (hereafter referred to as 'we', 'us' or 'our'). This employee handbook also summarises some of our staff benefits... MATERNITY. SHARED PARENTAL LEAVE. PATERNITY LEAVE. NOTIFICATION OF SICKNESS OR OTHER ABSENCE. If an employee is absent from work for any reason and the absence has not previously been authorised, they shall inform, or arrange for someone else to inform, their line manager by 08:00on the first day of absence. An employee shall properly explain any unauthorised absences... If an employee is absent from work due to sickness or injury for seven days or less, they shall complete our self-certification form on their return to work. If an employee is absent from work due to sickness or injury for more than seven days, they shall provide us with a general medical statement on the eighth day of sickness or injury. ... We operate the Statutory Sick Pay scheme...`
+            },
+            'doc4': {
+                name: 'doc-non-disclosure-agreement.pdf',
+                content: `THIS AGREEMENT is made on between: (i) Smith Ltd ('the Discloser') whose registered office is at 1 The Road, The Town, The County, AB1 2CD and (ii) James Jones ('the Recipient') of 2 The Road, The Town, The County, AB1 2CD. WHEREAS: The Parties have commenced discussions which it is anticipated may lead to agreement between them relating to the Project. The Parties agree that it may be necessary for the Discloser to disclose to the Recipient Confidential Information for the Purpose... 1 DEFINITIONS... Confidential Information: a) in respect of Information provided in Writing or in other tangible form, Information which at the time of provision is marked or otherwise designated to show expressly or by necessary implication that it is imparted in confidence; and b) in respect of Information that is imparted orally, any information that the Discloser or its representatives informed the Recipient at the time of disclosure was imparted in confidence;... The Recipient shall use the Confidential Information solely for the Purpose and not otherwise directly or indirectly deal with, use, publish or disclose...`
+            }
+        };
+
+        const searchInput = document.getElementById('searchInput');
+        const searchButton = document.getElementById('searchButton');
+        const resultsContainer = document.getElementById('resultsContainer');
+        
+        async function getAiAnswer(query, database) {
+            resultsContainer.innerHTML = '<div class="loader"></div>';
+
+            let context = "CONTEXT DOCUMENTS:\n\n";
+            for (const docId in database) {
+                context += `--- START OF DOCUMENT: ${database[docId].name} ---\n`;
+                context += `${database[docId].content}\n`;
+                context += `--- END OF DOCUMENT: ${database[docId].name} ---\n\n`;
+            }
+
+            const prompt = `You are an expert AI assistant. Your task is to answer the user's question based ONLY on the provided context documents.
+
+            ${context}
+
+            USER QUESTION: "${query}"
+
+            INSTRUCTIONS:
+            1.  Analyze the user's question carefully.
+            2.  If the user is asking for a specific document or template by name (e.g., "NDA template", "employee handbook"), and that document exists in the context, provide the FULL, CLEANED TEXT of that specific document. Format it nicely with headings and paragraphs. Start your response with "Here is the template for..." or "Here is the content of the...".
+            3.  For any other question, synthesize a clear, concise, and helpful answer using ONLY the information from the provided documents.
+            4.  Start your answer with a direct response to the question.
+            5.  After the answer, include a section titled "Source Information" and list the specific snippets from the documents that support your answer. For each snippet, mention the source document name.
+            6.  If the documents do not contain information to answer the question, respond with: "I'm sorry, but I could not find any information in the provided documents to answer your question."
+            7.  Your entire response must be formatted in clean HTML but DO NOT wrap the HTML in markdown code block. Use headings (h3), paragraphs (p), lists (ul, li), and bold text (strong) for clarity. Wrap the main answer in a div with class="bg-white p-6 rounded-lg border border-slate-200 shadow-sm". Wrap the source section in a similar div but with a class of "bg-slate-100 mt-4 p-4 border border-slate-200 rounded-lg".
+
+            `;
+
+            try {
+                let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                const payload = { contents: chatHistory };
+                const apiKey = "AIzaSyAot2q61XrEfryJpvMm46SuTysPRiPSf1Y"; // API key is handled by the environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed with status ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    
+                    const htmlResponse = result.candidates[0].content.parts[0].text.replace(/^```html\n?/, '').replace(/\n?```$/, '');
+                    resultsContainer.innerHTML = htmlResponse;
+                } else {
+                    throw new Error("Invalid response structure from AI model.");
+                }
+
+            } catch (error) {
+                console.error("AI Assistant Error:", error);
+                resultsContainer.innerHTML = `<div class="bg-red-100 text-red-700 p-4 rounded-md border border-red-300"><p><strong>Error:</strong> Could not get an answer from the AI assistant. Please check the console for details and try again.</p></div>`;
+            }
+        }
+
+        function handleSearch() {
+            const query = searchInput.value;
+            if (!query.trim()) {
+                resultsContainer.innerHTML = `<div class="bg-blue-100 text-blue-700 p-4 rounded-md border border-blue-300"><p>Please enter a question.</p></div>`;
+                return;
+            }
+            getAiAnswer(query, documentDatabase);
+        }
+
+        searchButton.addEventListener('click', handleSearch);
+        searchInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                handleSearch();
+            }
+        });
+
+    </script>
+</body>
+</html>

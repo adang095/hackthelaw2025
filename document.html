@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Legal Document Analyser (Comprehensive)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- PDF.js for reading PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs" type="module"></script>
+    <script type="module">
+        // Set the worker source for PDF.js (important for it to work)
+        // Ensure this path is correct if you host pdf.worker.min.mjs locally
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+        }
+    </script>
+    <!-- jsPDF for creating PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- html2canvas for capturing HTML as image for PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Align to top for better content flow */
+            min-height: 100vh;
+            padding: 2rem 1rem; /* Add padding for mobile */
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 1rem; /* More rounded corners */
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); /* Softer shadow */
+            padding: 2.5rem;
+            max-width: 1200px; /* Wider container for layout */
+            width: 100%;
+            margin-bottom: 2rem;
+            box-sizing: border-box;
+        }
+        textarea, input[type="file"] {
+            min-height: 100px;
+            resize: vertical;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            border: 1px solid #cbd5e1; /* Gray border */
+            width: 100%;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        textarea {
+            min-height: 120px; /* Slightly taller default for textareas */
+        }
+        textarea:focus, input[type="file"]:focus {
+            outline: none;
+            border-color: #6366f1; /* Indigo focus */
+        }
+        button {
+            background-color: #4f46e5; /* Deeper indigo */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none; /* Removed default border */
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: background-color 0.2s, transform 0.1s;
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); /* Button shadow */
+        }
+        button:hover {
+            background-color: #4338ca; /* Darker indigo on hover */
+            transform: translateY(-1px);
+        }
+        button:disabled {
+            background-color: #9ca3af; /* Gray out disabled button */
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        .loading-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 1rem;
+            color: #4f46e5;
+            font-weight: 600;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4f46e5;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .analysis-section, .correction-section {
+            background-color: #ffffff;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            border: 1px solid #e2e8f0;
+            margin-top: 2rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        }
+        .highlight-red {
+            background-color: #fecaca; /* Red-200 */
+            color: #b91c1c; /* Red-800 */
+            border-radius: 0.25rem;
+            padding: 0 0.25rem;
+            position: relative;
+            cursor: pointer;
+        }
+        .highlight-red .tooltip {
+            visibility: hidden;
+            background-color: #374151; /* Gray-700 */
+            color: #ffffff;
+            text-align: left;
+            border-radius: 0.375rem;
+            padding: 0.5rem 0.75rem;
+            position: absolute;
+            z-index: 10;
+            bottom: 125%; /* Position above the text */
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: pre-wrap; /* Preserve newlines in tooltip */
+            width: 280px; /* Fixed width for tooltip */
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            font-size: 0.875rem; /* text-sm */
+            line-height: 1.4;
+        }
+        .highlight-red:hover .tooltip {
+            visibility: visible;
+        }
+        /* Triangle for tooltip */
+        .highlight-red .tooltip::after {
+            content: "";
+            position: absolute;
+            top: 100%; /* At the bottom of the tooltip */
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #374151 transparent transparent transparent;
+        }
+
+        .issue-suggestion-box {
+            background-color: #eff6ff; /* Blue-50 */
+            border: 1px solid #bfdbfe; /* Blue-200 */
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        .issue-suggestion-box p {
+            font-size: 0.9rem;
+            color: #1f2937; /* Gray-800 */
+        }
+        .issue-suggestion-box .font-semibold {
+            color: #1d4ed8; /* Blue-700 */
+        }
+        .issue-suggestion-box .italic {
+            color: #4b5563; /* Gray-600 */
+        }
+        .issue-suggestion-box button {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+            box-shadow: none; /* Remove default button shadow for these small buttons */
+        }
+        .issue-suggestion-box .accept-btn {
+            background-color: #10b981; /* Green-500 */
+        }
+        .issue-suggestion-box .accept-btn:hover {
+            background-color: #059669; /* Green-600 */
+        }
+        .issue-suggestion-box .decline-btn {
+            background-color: #ef4444; /* Red-500 */
+        }
+        .issue-suggestion-box .decline-btn:hover {
+            background-color: #dc2626; /* Red-600 */
+        }
+
+        /* Responsive layout for input fields */
+        @media (min-width: 768px) {
+            .input-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-4xl font-extrabold text-indigo-700 mb-4 text-center">AI Legal Document Analyser</h1>
+        <p class="text-gray-600 mb-6 text-center">Upload or paste a legal document, provide context and criteria, and get AI-powered analysis with interactive corrections.</p>
+
+        <!-- User ID Display -->
+        <div id="userIdDisplay" class="text-sm text-center text-gray-600 mb-4 hidden">
+            Your User ID: <span class="font-mono bg-gray-200 px-2 py-1 rounded-md" id="currentUserId"></span>
+        </div>
+
+        <!-- Error Message Area -->
+        <div id="globalError" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md mb-4 hidden" role="alert">
+            <p class="font-bold">Error:</p>
+            <p id="globalErrorMessage"></p>
+        </div>
+
+        <div class="input-section bg-gray-50 p-6 rounded-lg mb-8 border border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Document Input & Analysis Parameters</h2>
+
+            <div class="input-grid">
+                <!-- Document to Analyze -->
+                <div>
+                    <div class="mb-4">
+                        <label for="documentUpload" class="block text-gray-700 text-lg font-medium mb-2">Upload Document (.txt, .pdf supported):</label>
+                        <input type="file" id="documentUpload" accept=".txt,.pdf">
+                        <p class="text-sm text-gray-500 mt-1">
+                            *Note: For PDFs, text will be extracted from text layers. Scanned PDFs (image-only) or password-protected PDFs cannot be processed.*
+                        </p>
+                        <div class="error-message text-red-600 text-sm mt-1 hidden" id="uploadError"></div>
+                    </div>
+
+                    <div class="mb-6">
+                        <label for="legalText" class="block text-gray-700 text-lg font-medium mb-2">Or, Paste Legal Document Text Directly:</label>
+                        <textarea id="legalText" placeholder="Enter legal document text here..."></textarea>
+                        <div class="error-message text-red-600 text-sm mt-1 hidden" id="textInputError"></div>
+                    </div>
+                </div>
+
+                <!-- Analysis Context & Criteria -->
+                <div>
+                    <div class="mb-4">
+                        <label for="documentDescription" class="block text-gray-700 text-lg font-medium mb-2">Document Description (Context):</label>
+                        <textarea id="documentDescription" placeholder="e.g., This is a draft software license agreement for a SaaS client, where we are the Provider. We want to ensure it protects our interests and is standard for a B2B SaaS agreement."></textarea>
+                        <div class="error-message text-red-600 text-sm mt-1 hidden" id="descriptionError"></div>
+                    </div>
+
+                    <div class="mb-6">
+                        <label for="analysisCriteria" class="block text-gray-700 text-lg font-medium mb-2">Analysis Criteria (What to analyze for):</label>
+                        <textarea id="analysisCriteria" placeholder="e.g., Identify overly broad indemnities against us (Provider), perpetual licenses that should be subscription, unclear payment terms, and overly harsh termination clauses against us. Also review the limitation of liability for industry standard protections for a software vendor."></textarea>
+                        <p class="text-sm text-gray-500 mt-1">
+                            Clearly specify what the AI should look for or evaluate in the document.
+                        </p>
+                        <div class="error-message text-red-600 text-sm mt-1 hidden" id="criteriaError"></div>
+
+                        <div class="mt-4">
+                            <label for="guidingDocumentUpload" class="block text-gray-700 text-md font-medium mb-2">Or, Upload Guiding Compliance Document (.txt):</label>
+                            <input type="file" id="guidingDocumentUpload" accept=".txt">
+                            <p class="text-sm text-gray-500 mt-1">
+                                Upload a plain text file containing detailed compliance guidelines or analysis criteria. This content will populate the 'Analysis Criteria' box above.
+                            </p>
+                            <div class="error-message text-red-600 text-sm mt-1 hidden" id="guidingDocError"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button id="analyzeButton" class="w-full">Analyze Document</button>
+        </div>
+
+        <div id="loadingIndicator" class="loading-indicator hidden">
+            <div class="loader"></div>
+            <span>Analyzing your document... This may take a moment.</span>
+        </div>
+
+        <!-- Original Document with Issues -->
+        <div class="analysis-section hidden" id="originalDocumentSection">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Original Document (Issues Highlighted)</h2>
+            <div id="originalDocumentDisplay" class="analysis-output font-mono text-sm p-4 border border-gray-300 rounded-md bg-gray-50 min-h-[150px]">
+                Document content will appear here with issues highlighted in red. Hover over highlights for details.
+            </div>
+        </div>
+
+        <!-- Corrected Document and PDF Download -->
+        <div class="correction-section hidden" id="correctionSection">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Corrected Document (Interactive Suggestions)</h2>
+            <div id="correctedDocumentDisplay" class="analysis-output font-mono text-sm p-4 border border-gray-300 rounded-md bg-white min-h-[250px]">
+                Review and apply AI suggestions here.
+            </div>
+            <button id="downloadPdfButton" class="mt-6 w-full bg-green-600 hover:bg-green-700">Download Corrected Document as PDF</button>
+        </div>
+    </div>
+
+    <script type="module">
+        // Firebase imports - MUST be imported as modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // No Firestore needed for this specific functionality, so firestore imports are removed.
+
+        // Global variables provided by the Canvas environment for Firebase config
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Initialize Firebase App and Auth
+        let app;
+        let auth;
+        let currentUserId = null; // Variable to hold the authenticated user ID
+
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+
+            // Sign in with custom token if available, otherwise anonymously
+            const signInFirebase = async () => {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                        console.log('Firebase: Signed in with custom token.');
+                    } else {
+                        await signInAnonymously(auth);
+                        console.log('Firebase: Signed in anonymously.');
+                    }
+                } catch (e) {
+                    console.error('Firebase Auth Error:', e);
+                    showGlobalError(`Firebase authentication failed: ${e.message}`);
+                }
+            };
+
+            // Set up auth state change listener
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                    document.getElementById('currentUserId').textContent = currentUserId;
+                    document.getElementById('userIdDisplay').classList.remove('hidden');
+                    console.log('User ID:', currentUserId);
+                } else {
+                    currentUserId = null;
+                    document.getElementById('userIdDisplay').classList.add('hidden');
+                    console.log('No user signed in.');
+                }
+            });
+
+            // Call sign-in on page load
+            signInFirebase();
+        } catch (e) {
+            console.error('Firebase Initialization Error:', e);
+            showGlobalError(`Firebase initialization failed: ${e.message}. App may not function correctly.`);
+        }
+
+
+        // Get references to all HTML elements
+        const documentUpload = document.getElementById('documentUpload');
+        const legalText = document.getElementById('legalText');
+        const documentDescription = document.getElementById('documentDescription');
+        const analysisCriteria = document.getElementById('analysisCriteria');
+        const guidingDocumentUpload = document.getElementById('guidingDocumentUpload');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const originalDocumentSection = document.getElementById('originalDocumentSection');
+        const originalDocumentDisplay = document.getElementById('originalDocumentDisplay');
+        const correctionSection = document.getElementById('correctionSection');
+        const correctedDocumentDisplay = document.getElementById('correctedDocumentDisplay');
+        const downloadPdfButton = document.getElementById('downloadPdfButton');
+
+        // Error message elements
+        const globalError = document.getElementById('globalError');
+        const globalErrorMessage = document.getElementById('globalErrorMessage');
+        const uploadError = document.getElementById('uploadError');
+        const textInputError = document.getElementById('textInputError');
+        const descriptionError = document.getElementById('descriptionError');
+        const criteriaError = document.getElementById('criteriaError');
+        const guidingDocError = document.getElementById('guidingDocError');
+
+        // Global state variables
+        let originalDocumentContent = '';
+        let currentAnalysisResults = []; // Stores the AI's identified issues with indices
+        let correctedDocumentContent = ''; // The document string being modified by user actions
+
+        // Helper functions for showing/hiding messages
+        function showMessage(element, message) {
+            element.textContent = message;
+            element.classList.remove('hidden');
+        }
+
+        function hideMessage(element) {
+            element.classList.add('hidden');
+            element.textContent = '';
+        }
+
+        function showGlobalError(message) {
+            showMessage(globalErrorMessage, message);
+            globalError.classList.remove('hidden');
+        }
+
+        function hideGlobalError() {
+            hideMessage(globalErrorMessage);
+            globalError.classList.add('hidden');
+        }
+
+        // Helper function to escape HTML for display
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+
+
+        // --- Core PDF Text Extraction Function ---
+        async function extractTextFromPdf(file) {
+            return new Promise(async (resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const arrayBuffer = e.target.result;
+                        // pdfjsLib is available globally due to type="module" script
+                        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+                        let fullPdfText = '';
+
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+                            // Join items with a space, then add newlines between pages for readability
+                            const pageText = textContent.items.map(item => item.str).join(' ');
+                            fullPdfText += pageText + '\n\n';
+                        }
+                        resolve(fullPdfText);
+                    } catch (error) {
+                        console.error("Error extracting text from PDF:", error);
+                        reject(new Error('Failed to extract text from PDF. This usually happens with scanned (image-only) PDFs or password-protected files.'));
+                    }
+                };
+                reader.onerror = () => {
+                    reject(new Error('Failed to read PDF file.'));
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // --- Gemini AI Analysis Function ---
+        async function performAiAnalysis(documentText, docDescription, analysisCriterias) {
+            originalDocumentContent = documentText; // Store the original content
+            correctedDocumentContent = documentText; // Initialize corrected with original
+
+            // Reset UI for new analysis
+            hideGlobalError();
+            loadingIndicator.classList.remove('hidden');
+            originalDocumentSection.classList.add('hidden');
+            correctionSection.classList.add('hidden');
+            analyzeButton.disabled = true;
+            downloadPdfButton.disabled = true;
+
+            try {
+                const prompt = `You are an AI Legal Document Analyser. Your task is to compare the 'Document to Analyze' against the 'Analysis Criteria' and 'Document Description'.
+Identify areas in the 'Document to Analyze' that deviate, are missing, or do not meet the specified criteria or context.
+
+For each identified issue, provide:
+1.  \`originalText\`: The exact string from the 'Document to Analyze' that represents the issue.
+2.  \`issueDescription\`: A clear explanation of why it's an issue based on the 'Analysis Criteria' and 'Document Description'.
+3.  \`suggestedCorrection\`: A concise suggested replacement or addition for the \`originalText\` to resolve the issue. If the issue is a missing clause, the \`originalText\` should be an empty string and \`suggestedCorrection\` should be the full suggested clause.
+4.  \`startIndex\`: The 0-indexed character position where the \`originalText\` begins in the 'Document to Analyze'.
+5.  \`endIndex\`: The 0-indexed character position where the \`originalText\` ends in the 'Document to Analyze'. (This will be \`startIndex\` if \`originalText\` is empty).
+
+Provide the output as a JSON array of objects.
+
+Example JSON output structure:
+[
+  {
+    "originalText": "This license is perpetual.",
+    "issueDescription": "The criteria specify that licenses should be subscription-based, not perpetual.",
+    "suggestedCorrection": "This license is granted on a subscription basis for the term specified in Schedule A.",
+    "startIndex": 1234,
+    "endIndex": 1260
+  },
+  {
+    "originalText": "due upon receipt",
+    "issueDescription": "Payment terms are unclear; they should specify 'net 30 days'.",
+    "suggestedCorrection": "due within thirty (30) days of the invoice date",
+    "startIndex": 567,
+    "endIndex": 583
+  },
+  {
+    "originalText": "",
+    "issueDescription": "A Data Protection Addendum (DPA) clause is missing, which is standard for B2B SaaS agreements.",
+    "suggestedCorrection": "7. DATA PROTECTION. The parties agree to comply with all applicable data protection laws. A separate Data Processing Addendum, incorporated herein by reference, governs the processing of personal data.",
+    "startIndex": 1800,
+    "endIndex": 1800
+  }
+]
+
+---
+Document to Analyze:
+\`\`\`
+${documentText}
+\`\`\`
+
+---
+Document Description:
+\`\`\`
+${docDescription}
+\`\`\`
+
+---
+Analysis Criteria:
+\`\`\`
+${analysisCriterias}
+\`\`\`
+`;
+                const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                const payload = {
+                    contents: chatHistory,
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    "originalText": { "type": "STRING" },
+                                    "issueDescription": { "type": "STRING" },
+                                    "suggestedCorrection": { "type": "STRING" },
+                                    "startIndex": { "type": "NUMBER" },
+                                    "endIndex": { "type": "NUMBER" }
+                                },
+                                "propertyOrdering": ["originalText", "issueDescription", "suggestedCorrection", "startIndex", "endIndex"]
+                            }
+                        }
+                    }
+                };
+
+                const apiKey = "AIzaSyAot2q61XrEfryJpvMm46SuTysPRiPSf1Y"; // API key is provided by Canvas runtime
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`API error: ${response.status} - ${errorData.error?.message || response.statusText}`);
+                }
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const jsonString = result.candidates[0].content.parts[0].text;
+                    let parsedJson = [];
+                    try {
+                        parsedJson = JSON.parse(jsonString);
+                        // Add a unique ID to each issue for stable referencing
+                        parsedJson = parsedJson.map((item, idx) => ({ ...item, id: idx }));
+
+                        // Filter and validate results
+                        parsedJson = parsedJson.filter(item =>
+                            item.startIndex !== undefined && item.endIndex !== undefined &&
+                            item.startIndex >= 0 && item.endIndex <= originalDocumentContent.length &&
+                            item.startIndex <= item.endIndex // Ensure start is not after end
+                        );
+
+                        // Sort by startIndex to process in order
+                        parsedJson.sort((a, b) => a.startIndex - b.startIndex);
+                        currentAnalysisResults = parsedJson; // Store valid results
+                        console.log("Analysis Results:", currentAnalysisResults);
+
+                        renderOriginalDocumentWithHighlights();
+                        renderCorrectedDocumentInteractive();
+                        correctionSection.classList.remove('hidden');
+                    } catch (parseError) {
+                        console.error('Error parsing JSON from API:', parseError);
+                        showGlobalError('Failed to parse analysis results. The AI might have returned malformed JSON. Please try again.');
+                        console.log('Raw API response JSON string:', jsonString);
+                    }
+                } else {
+                    showGlobalError('No analysis results returned from the AI. Please refine your criteria or document.');
+                    originalDocumentDisplay.innerHTML = `<p class="text-gray-500 italic">No issues found by the AI.</p>`;
+                }
+            } catch (err) {
+                console.error('Fetch error:', err);
+                showGlobalError(`Error during analysis: ${err.message}. Please check console for details.`);
+            } finally {
+                loadingIndicator.classList.add('hidden');
+                originalDocumentSection.classList.remove('hidden');
+                analyzeButton.disabled = false;
+                downloadPdfButton.disabled = false;
+            }
+        }
+
+        // --- Render Original Document with Red Highlights ---
+        function renderOriginalDocumentWithHighlights() {
+            let htmlContent = [];
+            let lastIndex = 0;
+
+            if (currentAnalysisResults.length === 0 && originalDocumentContent.length > 0) {
+                 originalDocumentDisplay.innerHTML = `<p class="text-gray-500 italic">No issues found in the document.</p>${escapeHtml(originalDocumentContent)}`;
+                 return;
+            } else if (originalDocumentContent.length === 0) {
+                 originalDocumentDisplay.innerHTML = `<p class="text-gray-500 italic">Document content will appear here once entered and analyzed.</p>`;
+                 return;
+            }
+
+
+            currentAnalysisResults.forEach((issue) => { // No need for index here, use issue.id
+                // Add text before the highlighted section
+                if (issue.startIndex > lastIndex) {
+                    htmlContent.push(escapeHtml(originalDocumentContent.substring(lastIndex, issue.startIndex)));
+                }
+
+                // Add the highlighted section with a tooltip
+                const originalTextSnippet = originalDocumentContent.substring(issue.startIndex, issue.endIndex);
+                htmlContent.push(`
+                    <span class="highlight-red">
+                        ${originalTextSnippet.length > 0 ? escapeHtml(originalTextSnippet) : '•[Missing Content]•'}
+                        <span class="tooltip">
+                            <span class="font-bold">Issue:</span> ${escapeHtml(issue.issueDescription)}<br><br>
+                            <span class="font-bold">Suggested Correction:</span> "${escapeHtml(issue.suggestedCorrection)}"
+                        </span>
+                    </span>
+                `);
+                lastIndex = issue.endIndex;
+            });
+
+            // Add any remaining text after the last highlighted section
+            if (lastIndex < originalDocumentContent.length) {
+                htmlContent.push(escapeHtml(originalDocumentContent.substring(lastIndex)));
+            }
+
+            originalDocumentDisplay.innerHTML = htmlContent.join('');
+        }
+
+        // --- Render Corrected Document with Interactive Suggestions ---
+        function renderCorrectedDocumentInteractive() {
+            let htmlContent = [];
+            let lastIndex = 0;
+
+            // Filter out issues that have been 'applied' (removed from currentAnalysisResults)
+            // currentAnalysisResults already contains filtered and re-indexed issues after apply/decline
+            const activeIssues = currentAnalysisResults;
+
+            if (activeIssues.length === 0 && correctedDocumentContent.length > 0) {
+                 correctedDocumentDisplay.innerHTML = `<p class="text-gray-500 italic">No pending issues. You can download the document now.</p><pre>${escapeHtml(correctedDocumentContent)}</pre>`;
+                 return;
+            } else if (correctedDocumentContent.length === 0 && originalDocumentContent.length > 0) {
+                 // This case should ideally not happen if originalContent is present but no issues.
+                 // If no issues, the corrected doc is just the original.
+                 correctedDocumentDisplay.innerHTML = `<p class="text-gray-500 italic">Document is clean, no pending issues. You can download the original document.</p><pre>${escapeHtml(correctedDocumentContent)}</pre>`;
+                 return;
+            } else if (correctedDocumentContent.length === 0) {
+                 correctedDocumentDisplay.innerHTML = `<p class="text-gray-500 italic">Corrected document will appear here for interactive changes.</p>`;
+                 return;
+            }
+
+            activeIssues.forEach((issue) => { // Use issue object directly
+                const issueStartIndex = issue.startIndex;
+                const issueEndIndex = issue.endIndex;
+
+                // Add text from the corrected document up to the current issue
+                if (issueStartIndex > lastIndex) {
+                    htmlContent.push(escapeHtml(correctedDocumentContent.substring(lastIndex, issueStartIndex)));
+                }
+
+                // Add the problematic text (from correctedDocumentContent at its current position) and the suggestion box
+                const problemTextInCurrentDoc = correctedDocumentContent.substring(issueStartIndex, issueEndIndex);
+                const displayProblemText = problemTextInCurrentDoc.length > 0 ? escapeHtml(problemTextInCurrentDoc) : "•[Missing Content]•";
+
+                htmlContent.push(`
+                    <span class="bg-yellow-100 text-yellow-800 rounded px-1" title="Original problematic text: ${escapeHtml(problemTextInCurrentDoc)}">
+                        ${displayProblemText}
+                    </span>
+                    <div class="issue-suggestion-box">
+                        <p><span class="font-semibold">Issue:</span> ${escapeHtml(issue.issueDescription)}</p>
+                        <p><span class="font-semibold">Suggested Change:</span> <span class="italic">"${escapeHtml(issue.suggestedCorrection)}"</span></p>
+                        <div class="flex space-x-2">
+                            <button data-action="accept" data-issue-id="${issue.id}" class="accept-btn">Accept</button>
+                            <button data-action="decline" data-issue-id="${issue.id}" class="decline-btn">Decline</button>
+                        </div>
+                    </div>
+                `);
+                lastIndex = issueEndIndex;
+            });
+
+            // Add any remaining text from the corrected document
+            if (lastIndex < correctedDocumentContent.length) {
+                htmlContent.push(escapeHtml(correctedDocumentContent.substring(lastIndex)));
+            }
+
+            correctedDocumentDisplay.innerHTML = htmlContent.join('');
+
+            // Add event listeners for the new buttons
+            correctedDocumentDisplay.querySelectorAll('button[data-action]').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    const action = event.target.dataset.action;
+                    const issueId = parseInt(event.target.dataset.issueId); // Parse as int
+
+                    // Find the actual issue object from currentAnalysisResults by its unique ID
+                    const issueToHandle = currentAnalysisResults.find(item => item.id === issueId);
+
+                    if (issueToHandle) {
+                        if (action === 'accept') {
+                            applyCorrection(issueToHandle);
+                        } else if (action === 'decline') {
+                            declineCorrection(issueToHandle);
+                        }
+                    } else {
+                        console.warn(`Issue with ID ${issueId} not found in currentAnalysisResults.`);
+                    }
+                });
+            });
+        }
+
+
+        // Function to apply a suggested correction
+        function applyCorrection(issueToApply) {
+            let doc = correctedDocumentContent;
+            let offsetChange = issueToApply.suggestedCorrection.length - (issueToApply.endIndex - issueToApply.startIndex);
+
+            // Apply the change to correctedDocumentContent
+            const before = doc.substring(0, issueToApply.startIndex);
+            const after = doc.substring(issueToApply.endIndex);
+            correctedDocumentContent = before + issueToApply.suggestedCorrection + after;
+
+            // Remove the applied issue and adjust indices of subsequent issues
+            currentAnalysisResults = currentAnalysisResults
+                .filter(issue => issue.id !== issueToApply.id) // Filter out the applied issue
+                .map(issue => {
+                    // Only adjust issues that start AFTER the applied change's original end index
+                    if (issue.startIndex >= issueToApply.endIndex) {
+                        return {
+                            ...issue,
+                            startIndex: issue.startIndex + offsetChange,
+                            endIndex: issue.endIndex + offsetChange
+                        };
+                    }
+                    return issue;
+                })
+                .sort((a,b) => a.startIndex - b.startIndex); // Re-sort to maintain order
+
+            // Re-render both views
+            renderOriginalDocumentWithHighlights();
+            renderCorrectedDocumentInteractive();
+            console.log("Applied correction. Corrected Document Length:", correctedDocumentContent.length);
+        }
+
+        // Function to decline a suggestion
+        function declineCorrection(issueToDecline) {
+            // Simply remove the issue from the currentAnalysisResults based on its ID
+            currentAnalysisResults = currentAnalysisResults.filter(issue => issue.id !== issueToDecline.id);
+
+            // Re-render both views
+            renderOriginalDocumentWithHighlights();
+            renderCorrectedDocumentInteractive();
+            console.log("Declined correction.");
+        }
+
+        // --- Download Corrected Document as PDF Function ---
+        async function downloadCorrectedDocumentAsPdf() {
+            downloadPdfButton.disabled = true;
+            loadingIndicator.classList.remove('hidden');
+            loadingIndicator.querySelector('span').textContent = 'Generating PDF from corrected document...';
+
+            try {
+                // Create a temporary div to render the corrected text without interactive elements
+                const tempDiv = document.createElement('div');
+                tempDiv.style.whiteSpace = 'pre-wrap';
+                tempDiv.style.padding = '20px';
+                tempDiv.style.fontFamily = 'Inter, sans-serif';
+                tempDiv.style.fontSize = '12px';
+                tempDiv.innerHTML = escapeHtml(correctedDocumentContent); // Ensure content is escaped for PDF rendering
+
+                // Append to body temporarily for html2canvas to render correctly
+                document.body.appendChild(tempDiv);
+
+                // Use html2canvas to render the content to a canvas
+                // Increased scale further for higher quality PDF, adjusted for print media
+                const canvas = await html2canvas(tempDiv, { scale: 3, useCORS: true, logging: false });
+                const imgData = canvas.toDataURL('image/png', 1.0); // 1.0 quality
+
+                // Remove the temporary div
+                document.body.removeChild(tempDiv);
+
+                // Initialize jsPDF
+                const { jsPDF } = window.jspdf;
+                // Calculate PDF dimensions based on canvas aspect ratio to fit A4 portrait
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+
+                const imgWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+
+                pdf.save('corrected_legal_document.pdf');
+
+            } catch (err) {
+                console.error('Error generating PDF:', err);
+                showGlobalError(`Failed to generate PDF: ${err.message}. Please try again.`);
+            } finally {
+                loadingIndicator.classList.add('hidden');
+                loadingIndicator.querySelector('span').textContent = 'Analyzing your document... This may take a moment.'; // Reset text
+                downloadPdfButton.disabled = false;
+            }
+        }
+
+
+        // --- Event Listener for Guiding Document Upload ---
+        guidingDocumentUpload.addEventListener('change', async (event) => {
+            hideMessage(guidingDocError); // Clear previous error
+            const file = event.target.files[0];
+            if (!file) { return; } // User cancelled file selection
+
+            if (file.type !== 'text/plain') {
+                showMessage(guidingDocError, 'Please upload a plain text (.txt) file for the guiding document.');
+                guidingDocumentUpload.value = ''; // Clear input if wrong type
+                return;
+            }
+            try {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    analysisCriteria.value = e.target.result; // Populate the criteria textarea
+                };
+                reader.onerror = () => {
+                    showMessage(guidingDocError, 'Error reading guiding document.');
+                };
+                reader.readAsText(file);
+            } catch (error) {
+                console.error("Error reading guiding document:", error);
+                showMessage(guidingDocError, `An unexpected error occurred while reading the guiding document: ${error.message}`);
+            }
+        });
+
+        // --- Main Analyze Button Click Handler ---
+        analyzeButton.addEventListener('click', async () => {
+            // Clear all previous errors and results sections
+            hideGlobalError();
+            hideMessage(uploadError);
+            hideMessage(textInputError);
+            hideMessage(descriptionError);
+            hideMessage(criteriaError);
+            hideMessage(guidingDocError);
+            originalDocumentSection.classList.add('hidden');
+            correctionSection.classList.add('hidden');
+            originalDocumentDisplay.innerHTML = `Document content will appear here with issues highlighted in red. Hover over highlights for details.`;
+            correctedDocumentDisplay.innerHTML = `Review and apply AI suggestions here.`;
+            loadingIndicator.classList.add('hidden'); // Ensure hidden initially
+            downloadPdfButton.disabled = true; // Disable download button until analysis is complete
+
+            let documentContent = '';
+            let isDocumentProvided = false;
+
+            // 1. Determine document content source (upload or paste)
+            if (documentUpload.files.length > 0) {
+                isDocumentProvided = true;
+                const file = documentUpload.files[0];
+                const fileType = file.type;
+
+                if (fileType === 'text/plain') {
+                    try {
+                        const reader = new FileReader();
+                        documentContent = await new Promise((resolve, reject) => {
+                            reader.onload = (e) => resolve(e.target.result);
+                            reader.onerror = reject;
+                            reader.readAsText(file);
+                        });
+                    } catch (error) {
+                        showMessage(uploadError, 'Error reading text file: ' + error.message);
+                        return;
+                    }
+                } else if (fileType === 'application/pdf') {
+                    try {
+                        // Ensure pdfjsLib is loaded before calling its functions
+                        if (typeof pdfjsLib === 'undefined' || !pdfjsLib.getDocument) {
+                            throw new Error("PDF.js library is not loaded. Please ensure script is correct.");
+                        }
+                        documentContent = await extractTextFromPdf(file);
+                    } catch (error) {
+                        showMessage(uploadError, 'Error processing PDF: ' + error.message);
+                        return;
+                    }
+                } else {
+                    showMessage(uploadError, 'Unsupported file type. Please upload a .txt or .pdf file.');
+                    return;
+                }
+            } else if (legalText.value.trim() !== '') {
+                isDocumentProvided = true;
+                documentContent = legalText.value.trim();
+            }
+
+            // 2. Validate all required inputs
+            if (!isDocumentProvided) {
+                showMessage(uploadError, 'Please upload a document or paste text directly.');
+                showMessage(textInputError, 'A document or text is required for analysis.');
+                return;
+            }
+            if (documentDescription.value.trim() === '') {
+                showMessage(descriptionError, 'Please provide a description of the document context.');
+                return;
+            }
+            if (analysisCriteria.value.trim() === '') {
+                showMessage(criteriaError, 'Please provide the analysis criteria (type here or upload a guiding document).');
+                return;
+            }
+
+            // If all validations pass, proceed with AI analysis
+            await performAiAnalysis(
+                documentContent,
+                documentDescription.value.trim(),
+                analysisCriteria.value.trim()
+            );
+        });
+
+        // --- Input Change Listeners to Clear Errors and Reset Display ---
+        [documentUpload, legalText, documentDescription, analysisCriteria].forEach(input => {
+            input.addEventListener('input', () => {
+                hideGlobalError();
+                hideMessage(uploadError);
+                hideMessage(textInputError);
+                hideMessage(descriptionError);
+                hideMessage(criteriaError);
+                originalDocumentSection.classList.add('hidden');
+                correctionSection.classList.add('hidden');
+                originalDocumentDisplay.innerHTML = `Document content will appear here with issues highlighted in red. Hover over highlights for details.`;
+                correctedDocumentDisplay.innerHTML = `Review and apply AI suggestions here.`;
+                loadingIndicator.classList.add('hidden');
+                downloadPdfButton.disabled = true;
+                currentAnalysisResults = []; // Clear results on new input
+                originalDocumentContent = '';
+                correctedDocumentContent = '';
+            });
+        });
+
+        // Special handling for guiding document input to clear its specific error
+        guidingDocumentUpload.addEventListener('change', () => {
+            hideMessage(guidingDocError);
+            // Also trigger general input clear for consistency
+            hideGlobalError();
+            originalDocumentSection.classList.add('hidden');
+            correctionSection.classList.add('hidden');
+            originalDocumentDisplay.innerHTML = `Document content will appear here with issues highlighted in red. Hover over highlights for details.`;
+            correctedDocumentDisplay.innerHTML = `Review and apply AI suggestions here.`;
+            loadingIndicator.classList.add('hidden');
+            downloadPdfButton.disabled = true;
+            currentAnalysisResults = []; // Clear results on new input
+            originalDocumentContent = '';
+            correctedDocumentContent = '';
+        });
+
+        // Event listener for the Download Corrected PDF button
+        downloadPdfButton.addEventListener('click', downloadCorrectedDocumentAsPdf);
+
+        // Optional: Pre-fill with example data for quick testing on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Uncomment the following lines to pre-fill the fields for quick testing
+            /*
+            legalText.value = `AGREEMENT FOR PROVISION OF SOFTWARE SERVICES
+
+This Agreement ("Agreement") is made effective as of January 1, 2025, by and between
+Software Innovations Inc. ("Provider"), a company duly organized under the laws of Delaware,
+and Global Corp. ("Client"), a corporation organized under the laws of New York.
+
+WHEREAS, Provider develops and licenses certain software applications; and
+WHEREAS, Client desires to license and use Provider's software;
+
+NOW, THEREFORE, in consideration of the mutual covenants and agreements contained herein,
+the parties agree as follows:
+
+1. LICENSE.
+Provider hereby grants to Client a non-exclusive, non-transferable license to use the Software
+solely for Client's internal business operations. This license is perpetual.
+
+2. FEES AND PAYMENT.
+Client shall pay Provider the fees as set forth in Schedule A. All invoices are due upon receipt.
+Late payments will incur a penalty of 10% per annum.
+
+3. INDEMNIFICATION.
+Client shall indemnify and hold Provider harmless from any claims, damages, liabilities, costs, and expenses
+(including reasonable attorneys' fees) arising out of or related to Client's use of the Software.
+
+4. LIMITATION OF LIABILITY.
+IN NO EVENT SHALL PROVIDER BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES,
+INCLUDING WITHOUT LIMITATION, LOST PROFITS, DATA LOSS, OR BUSINESS INTERRUPTION, ARISING OUT OF OR IN CONNECTION WITH THIS AGREEMENT.
+PROVIDER'S TOTAL LIABILITY ARISING OUT OF OR RELATED TO THIS AGREEMENT SHALL NOT EXCEED THE FEES PAID BY CLIENT IN THE TWELVE (12) MONTHS PRIOR TO THE CLAIM.
+
+5. TERMINATION.
+Either party may terminate this Agreement immediately for any reason by providing written notice.
+
+6. GOVERNING LAW.
+This Agreement shall be governed by and construed in accordance with the laws of the State of California.`;
+
+            documentDescription.value = "This is a draft software license agreement for a SaaS client, where we are the Provider. We need to ensure it protects our interests and is standard for a B2B SaaS agreement for software services.";
+            analysisCriteria.value = "Identify overly broad indemnities against us (Provider), perpetual licenses that should be subscription, unclear payment terms, and any clauses that are disadvantageous to a software vendor, especially regarding termination for convenience or lack of specific notice periods. Also, review the limitation of liability for standard protections and ensure intellectual property ownership is clearly defined in our favor. Ensure a Data Protection Addendum (DPA) clause is present.";
+            */
+        });
+    </script>
+</body>
+</html>
